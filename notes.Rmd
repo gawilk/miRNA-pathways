@@ -13,7 +13,7 @@ This vignette gives some instructions and examples regarding how to apply the mi
 
 First, Seq data must be downloaded from the TCGA data portal (https://portal.gdc.cancer.gov/projects). We downloaded Level 3 data sequenced on IlluminaHiSeq platforms for RNASeqV2 (gene expression) and miRNASeq (miRNA expression) for Breast (BRCA), Liver (LIHC), Lung (LUSC), and Prostate (PRAD) cancers. This data is not provided in the repo due to its size. To follow this vignette, download the Seq data for your cancer of choice and place it in whichever directory you wish. You may also download clinical data for exploratory purposes.
 
-This repo is assumed to apply to Breast cancer, in which the raw data files live in rawdata/. Update the file paths and cancer types to wherever the Seq data have been downloaded as necessary. 
+This repo is assumed to apply to Breast cancer, in which the raw data files live in rawdata/ . Update the file paths and cancer types to wherever the Seq data have been downloaded as necessary. 
 
 ## Directory structure
 
@@ -31,25 +31,19 @@ In addition, source functions are split into two separate files, one called Comb
 
 ## Data processing
 
-To begin the vignette, run R script 1_CreateDataObjects.R using your working paths to combine raw data files into R data objects and save them. Save them using your preferred naming conventions. Just remember to update variable names in all other scripts to be consistent!
+To begin the vignette, run R script 1_CreateDataObjects.R using your working paths to combine raw data files into R data objects and save them. Save them using your preferred naming conventions. Just remember to update variable names in all other scripts to be consistent! To run 1_CreateDataObjects.R in terminal type:
 
 ```{bash createData, eval=F, echo=T}
 R CMD BATCH scripts/1_CreateDataObjects.R
 ```
 
-Then run R script 2_NormalizeData.R to filter out samples that are not tumor or normal tissue and convert the RNASeq data into Transcripts per Million (TPM).
+Then run R script 2_NormalizeData.R to filter out samples that are not tumor or normal tissue and convert the RNASeq data into Transcripts per Million (TPM). Run 2_NormalizeData.R in terminal:
 
 ```{bash NormalizeData, eval=F, echo=T}
 R CMD BATCH scripts/2_NormalizeData.R
 ```
 
-For the sake of convenience, we have included a Breast Cancer (BRCA) processed ExpressionSet after running 2_NormalizeData.R.  
-
-```{bash BreastData, eval=F, echo=T}
-data/BRCAEsetTPM.RData
-```
-
-The data in this Breast cancer ExpressionSet looks something like this: 
+In this vignette, the Breast Cancer (BRCA) ExpressionSet, BRCAEsetTPM, after processing and normalization is assumed to look something like this:
 
 ```{R loadLibraries, eval=T, echo=F, include=F}
 library(Biobase)
@@ -62,9 +56,11 @@ load("data/BRCAEsetTPM.RData")
 head(exprs(BRCAEsetTPM[, 1:4]))
 ```
 
+It includes all gene expression data for Breast cancer samples. Note that we have not included it in data/ because it is too large for the repo. You must build it on your own. 
+
 ## Isomap dimension reduction
 
-In step 3, we run 3_ReducePathways.R on BRCAEsetTPM.RData, the provided ExpressionSet. This script systematically subsets all gene expression data by pathway genes from the KEGG database. For each pathway, it computes the Isomap embedding, the Pathway Activity Summary (PAS). The meat of the script is in:
+In step 3, we run 3_ReducePathways.R on BRCAEsetTPM.RData, the Breast cancer ExpressionSet. This script systematically subsets all gene expression data by pathway genes from the KEGG database. For each pathway, it computes the Isomap embedding, the Pathway Activity Summary (PAS). The meat of the script is in:
 
 ```{R showIsomap, eval=F, echo=T}
 BRCAPathIso <- mclapply(GEpaths, function(pathway) {
@@ -92,6 +88,8 @@ IsoEXAMPLE <- lapply(GEpaths, function(pathway) {
 })
 ```
 
+We have saved our PAS output in data/ for plotting. You can inspect it and play with it.
+
 ##miRNA-pathway correlation
 
 In step 4, we correlate the PAS with miRNA expression class-conditionally, for all miRNA-pathway pairs. Afterwards, we compute the difference in tumor vs. normal correlation coefficients as a measure of disruption of pathway activity by miRNAs. Significance is assessed by permutation testing. We can run this code by: 
@@ -111,7 +109,7 @@ composed of a matrix "trueCorlDiffs" of miRNA-pathway correlation differences, a
 
 ## Making Plots
 
-After having run this analysis on Breast cancer, we now have all the data to plot a figure in the manuscript:
+We have now generated enough data to plot one of the figures in the manuscript. Namely, we can inspect how a miRNA and a PAS behave differently across different tissues: 
 
 ```{R showPlot, eval=T, echo=F, warning=F}
 load("data/BRCAPathIso.RData")
