@@ -1,0 +1,153 @@
+---
+title: "Disrupted pathways by miRNAs"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This vignette gives some instructions and examples regarding how to apply the miRNA-pathway algorithm to TCGA data. 
+
+First, Seq data must be downloaded from the TCGA data portal (https://portal.gdc.cancer.gov/projects). We downloaded Level 3 data sequenced on IlluminaHiSeq platforms for RNASeqV2 (gene expression) and miRNASeq (miRNA expression) for Breast (BRCA), Liver (LIHC), Lung (LUSC), and Prostate (PRAD) cancers. This data is not provided in the repo due to its size. To follow this vignette, download the Seq data for your cancer of choice and place it in whichever directory you wish. You may also download clinical data for exploratory purposes.
+
+This repo is assumed to apply to Breast cancer, in which the raw data files live in rawdata/. Update the file paths and cancer types to wherever the Seq data have been downloaded as necessary. 
+
+## Directory structure
+
+The directory structure is pretty self-explanatory and consists of three main subdirectories: some provided R data objects in data/ , analysis scripts in scripts/ , and source functions live in source/ . 
+
+```{bash Directory, eval=F, echo=T}
+data/
+rawdata/
+scripts/
+source/
+
+```
+
+In addition, source functions are split into two separate files, one called CombineData.R to combine raw data into working R data objects, and another called AnalysisFunctions.R for data analysis. 
+
+## Data processing
+
+To begin the vignette, run R script 1_CreateDataObjects.R using your working paths to combine raw data files into R data objects and save them. Save them using your preferred naming conventions. Just remember to update variable names in all other scripts to be consistent!
+
+```{bash createData, eval=F, echo=T}
+R CMD BATCH scripts/1_CreateDataObjects.R
+```
+
+Then run R script 2_NormalizeData.R to filter out samples that are not tumor or normal tissue and convert the RNASeq data into Transcripts per Million (TPM).
+
+```{bash NormalizeData, eval=F, echo=T}
+R CMD BATCH scripts/2_NormalizeData.R
+```
+
+For the sake of convenience, we have included a Breast Cancer (BRCA) processed ExpressionSet after running 2_NormalizeData.R.  
+
+```{bash BreastData, eval=F, echo=T}
+data/BRCAEsetTPM.RData
+```
+
+The data in this Breast cancer ExpressionSet looks something like this: 
+
+```{R loadLibraries, eval=T, echo=F, include=F}
+library(Biobase)
+library(ggplot2)
+source("source/AnalysisFunctions.R")
+```
+
+```{R showBreast, eval=T, echo=F}
+load("data/BRCAEsetTPM.RData")
+head(exprs(BRCAEsetTPM[, 1:4]))
+```
+
+## Isomap dimension reduction
+
+In step 3, we run 3_ReducePathways.R on BRCAEsetTPM.RData, the provided ExpressionSet. This script systematically subsets all gene expression data by pathway genes from the KEGG database. For each pathway, it computes the Isomap embedding, the Pathway Activity Summary (PAS). The meat of the script is in:
+
+```{R showIsomap, eval=F, echo=T}
+BRCAPathIso <- mclapply(GEpaths, function(pathway) {
+  knn <- findKisomap(pathway, K = seq(4,20), scale = FALSE, plot = FALSE)
+  pathway <- scale(pathway)
+  distX <- as.matrix(dist(pathway))
+  iso <- isomap(distX, ndim = 6, k = knn$k)
+  iso <- c(iso, k = knn$k)
+  return(iso)
+}, mc.cores = 6, mc.preschedule = FALSE)
+save(BRCAPathIso, file = "data/BRCAPathIso.RData")
+```
+
+Notice this has been parallelized across multiple cores using the mclapply function (utilizing 6 cores in this case). We ramp the free parameter in Isomap, k, to find its "optimal" value as defined in our manuscript using findKisomap(). This computation is fairly intensive for a personal machine and has been run on a computational cluster. You can change the parallelization parameter to suit your computational needs.
+
+We can easily alter the code to run the same k value (k = 8 in this case) for every pathway and thereby remove ramping. This computation will be faster (but not "optimal" in our sense) and can be run on a personal machine.
+
+```{R showIsoFast, eval=F, echo=T}
+IsoEXAMPLE <- lapply(GEpaths, function(pathway) {
+  pathway <- scale(pathway)
+  distX <- as.matrix(dist(pathway))
+  iso <- isomap(distX, ndim = 6, k = 8)
+  iso <- c(iso, k = 8)
+  return(iso)
+})
+```
+
+##miRNA-pathway correlation
+
+In step 4, we correlate the PAS with miRNA expression class-conditionally, for all miRNA-pathway pairs. Afterwards, we compute the difference in tumor vs. normal correlation coefficients as a measure of disruption of pathway activity by miRNAs. Significance is assessed by permutation testing. We can run this code by: 
+
+```{bash RunClassCorl, eval=F, echo=T}
+R CMD BATCH scripts/4_CorlMiRNAsPathways.R
+```
+
+4_CorlMiRNAsPathways.R may take a little while to run due to resampling. The output is a list as shown below,
+
+```{R showSummary, eval=T, echo=F}
+load("data/BRCACorlDiffs1e5.RData")
+str(BRCACorlDiffs1e5)
+```
+
+composed of a matrix "trueCorlDiffs" of miRNA-pathway correlation differences, a matrix "pvals" that displays their significance by resampling (p-values), and a vector "commonSamples" of sample names they have in common that were used in their computation. 
+
+## Making Plots
+
+After having run this analysis on Breast cancer, we now have all the data to plot a figure in the manuscript:
+
+```{R showPlot, eval=T, echo=F, warning=F}
+load("data/BRCAPathIso.RData")
+load("data/BRCA_miRNASeq.RData")
+
+filterData <- function(miR, ISOlist) {
+  miR <- miR[, apply(miR, 2, median) > 0.001]
+  ISO <- sapply(ISOlist, function(pathway) pathway$points[, 1])
+  data <- findCommonSamples(miR, ISO, na.rm = TRUE)
+  return(data)
+}
+
+createdf <- function(mirID, pathID, datalist) {
+  df <- data.frame(mirna = as.numeric(datalist$mirna[, mirID]), 
+                   path = as.numeric(datalist$paths[, pathID]), 
+                   tissue = substr(datalist$commonSamples, 14, 15), 
+                   stringsAsFactors = TRUE)
+  return(df)
+}
+
+BRCAlist <- filterData(miR = t(BRCA_miRNASeq), ISOlist = BRCAPathIso)
+BRCAdf <- createdf(mirID = "hsa-mir-146b", pathID = "00330", datalist = BRCAlist)
+
+gBRCA <- ggplot(BRCAdf, aes(x = path, y = mirna, color = tissue, shape = tissue, alpha = tissue)) + 
+  scale_color_manual(values = c("red", "blue")) + scale_alpha_manual(values = c(0.4, 0.6)) + 
+  geom_point(size = 4, show_guide = FALSE) + 
+  theme(panel.background = element_rect(fill = "white", colour = "white")) + 
+  xlab(paste0("Arginine and proline metabolism PAS")) + 
+  ylab("hsa-mir-146b") + scale_y_log10() + 
+  stat_smooth(aes(linetype = tissue), color = "black", method = "loess", se = FALSE, size = 1.25, show_guide = FALSE) +
+  theme(axis.title.x = element_text(size = 16), axis.title.y = element_text(size = 16)) +
+  theme(axis.line = element_line(size = 1, color = "grey")) +
+  theme(plot.title = element_text(size = 18, hjust = 0.5)) + ggtitle("Breast")
+
+gBRCA
+
+```
+
+
