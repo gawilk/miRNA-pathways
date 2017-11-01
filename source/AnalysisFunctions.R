@@ -1,4 +1,4 @@
-# Analysis functions to source for analysis
+# Analysis functions to source
 
 #==============================================================================
 # get genes in pathway
@@ -32,7 +32,7 @@ getPathwayGenes <- function(pathID = NULL) {
 }
 
 #==============================================================================
-# Subsetting gene expression data by KEGG paths
+# subset gene expression data by KEGG paths
 #==============================================================================
 
 subsetGEbyKEGG <- function(eset, pathIDs = NULL) {
@@ -57,10 +57,17 @@ subsetGEbyKEGG <- function(eset, pathIDs = NULL) {
 }
 
 #====================================================================================
-#Find "optimal" K through ISOMAP
+# find "optimal" k through Isomap
 #====================================================================================
 
 findKisomap <- function(X, K, scale = TRUE, plot = TRUE) {
+  # Args:
+  #   X: numeric matrix
+  #   K: sequence of k values to consider
+  #   scale: scale columns of X? TRUE or FALSE
+  #   plot: plot Isomap spectra vs. PCA spectra? TRUE or FALSE
+  # Returns:
+  #   A list of the optimal "k" and the spectral gap ratio
   require(vegan)
   if (scale) {
     X <- scale(X, center = TRUE, scale = TRUE)
@@ -107,7 +114,7 @@ findKisomap <- function(X, K, scale = TRUE, plot = TRUE) {
 }
 
 #==============================================================================
-# Separation of phenotypes along PSS (p-vals) 
+# separation of phenotypes along PAS (p-vals) 
 #==============================================================================
 
 phenoSep <- function(embeddings, sampClasses, classA = "01", classB = "11") {
@@ -129,7 +136,7 @@ phenoSep <- function(embeddings, sampClasses, classA = "01", classB = "11") {
 }
 
 #====================================================================================
-#Find common samples in miRNA Seq and pathway data
+# find common samples in miRNASeq and pathway data
 #====================================================================================
 
 findCommonSamples <- function(miRNASeq, pathMatrix, barcode.len = 15, na.rm = FALSE) {
@@ -155,7 +162,7 @@ findCommonSamples <- function(miRNASeq, pathMatrix, barcode.len = 15, na.rm = FA
 }
 
 #====================================================================================
-#Compare correlations across samples classes between two matrices
+# compare correlations across samples classes between two matrices
 #====================================================================================
 
 compareCorls <- function(X, Y, sampClasses, classA = "01", classB = "11") {
@@ -181,7 +188,7 @@ compareCorls <- function(X, Y, sampClasses, classA = "01", classB = "11") {
 }
 
 #====================================================================================
-#Compute p-values for each miRNA-pathway pair
+# compute p-values for each miRNA-pathway pair
 #====================================================================================
 
 computePvals <- function(X, Y, trueCorlDiffs, sampClasses, classA = "01", classB = "11",
@@ -206,7 +213,7 @@ computePvals <- function(X, Y, trueCorlDiffs, sampClasses, classA = "01", classB
 }
 
 #====================================================================================
-#wrapper function to compute miRNA-PSS class-corl diffs
+# wrapper function to compute miRNA-PAS class-corl diffs
 #====================================================================================
 
 computemiRNAPSSCorls <- function(miRNA, PSS, resamplings) {
@@ -231,7 +238,7 @@ computemiRNAPSSCorls <- function(miRNA, PSS, resamplings) {
 }
 
 #====================================================================================
-#finds most significant miRNA-pathway pairs by corl diff
+# finds most significant miRNA-pathway pairs by corl diff
 #====================================================================================
 
 sortPairs <- function(corllist, significance = NULL) {
@@ -261,7 +268,7 @@ sortPairs <- function(corllist, significance = NULL) {
 }
 
 #====================================================================================
-#pathway intersecting genes
+# pathway intersecting genes
 #====================================================================================
 
 PathwayIntersectGenes <- function(assayedGenes = NULL) {
@@ -354,4 +361,21 @@ computePathwayEnrichment <- function(mirnaID, pathwayID, KEGGgenes) {
   n <- length(setdiff(KEGGgenes, mirTargets))
   k <- length(pathGenes)
   return(phyper(q = x - 1, m = m, n = n, k = k, lower.tail = FALSE))
+}
+
+#==============================================================================
+# get Isomap spectra
+#==============================================================================
+
+getSpectra <- function(Iso, plot.spectra = TRUE) {
+  # Args:
+  #   Iso: Isomap output from vegan package
+  #   plot.spectra: plot the spectra? TRUE or FALSE
+  # Returns:
+  #   Isomap spectra by total proportion
+  spect <- Iso$eig/sum(Iso$eig)
+  if (plot.spectra) {
+    plot(spect, xlab = "Index", ylab = "spectra", main = "Isomap spectra")
+  }
+  return(spect)
 }
